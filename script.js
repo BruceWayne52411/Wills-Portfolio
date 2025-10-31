@@ -162,13 +162,11 @@ async function sendOtp(){
   setStatus('Sending code...');
 
   // Invite-only: requires the user to exist already; set shouldCreateUser:false
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      shouldCreateUser: false,
-      emailRedirectTo: window.location.origin + window.location.pathname // same page callback
-    }
-  });
+  await supabase.auth.signInWithOtp({
+  email,
+  options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname }
+});
+
 
   if (error) return setStatus(error.message);
 
@@ -200,15 +198,35 @@ async function verifyOtp(){
   toggleEditMode(true);
 }
 
-// Handle magic-link redirect (hash or code)
-async function handleMagicLink(){
-  const hash = window.location.hash || '';
-  if(hash && (hash.includes('access_token') || hash.includes('code='))){
-    const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-    if(error) console.error('Magic link exchange failed:', error.message);
-    history.replaceState({}, document.title, window.location.pathname);
+async function handleMagicLink() {
+  const url = new URL(window.location.href);
+
+  // Hash-based tokens (old style)
+  const hasHashToken =
+    url.hash.includes('access_token') ||
+    url.hash.includes('refresh_token') ||
+    url.hash.includes('type=recovery');
+
+  // PKCE-style query params (?code=...&state=...)
+  const hasPkce =
+    url.searchParams.get('code') && url.searchParams.get('state');
+
+  if (hasHashToken || hasPkce) {
+    const { error } = await supabase.auth.exchangeCodeForSession(url.href);
+    if (error) console.error('Magic link exchange failed:', error.message);
+    // Clean URL after exchange
+    history.replaceState({}, document.title, url.pathname);
   }
 }
+
+// At any time:
+const { data: { session } } = await supabase.auth.getSession();
+console.log('signed in as:', session?.user?.email);
+
+// And check your allowlist policy path:
+const { data: allowed, error: allowErr } = await supabase.rpc('is_allowlisted');
+console.log('is_allowlisted?', allowed, allowErr);
+
 
 /* =========================
    Events / Bootstrap
