@@ -26,6 +26,25 @@ function setLoginLabel(){
   if (lab) lab.textContent = state.session ? 'Editing (Logout)' : 'Admin';
 }
 
+async function refreshAuthUI() {
+  const { data: { session } } = await supabase.auth.getSession();
+  state.session = session;
+
+  let allowed = false;
+  if (session) {
+    const { data, error } = await supabase.rpc('is_allowlisted');
+    if (error) console.warn('is_allowlisted RPC error:', error);
+    allowed = !!data;
+  }
+
+  state.isAdmin = allowed;
+  toggleEditMode(state.isAdmin);           // only show edit tools if allowlisted
+  qs('#loginLabel').textContent =
+    state.isAdmin ? 'Editing (Logout)' :
+    (state.session ? 'Logout' : 'Admin');  // clearer button label
+}
+
+
 /* =====================
    Public content (READ)
    ===================== */
@@ -200,24 +219,18 @@ async function verifyOtp(){
 
 async function handleMagicLink() {
   const url = new URL(window.location.href);
-
-  // Hash-based tokens (old style)
-  const hasHashToken =
-    url.hash.includes('access_token') ||
-    url.hash.includes('refresh_token') ||
-    url.hash.includes('type=recovery');
-
-  // PKCE-style query params (?code=...&state=...)
-  const hasPkce =
-    url.searchParams.get('code') && url.searchParams.get('state');
-
+  const hasHashToken = url.hash.includes('access_token') || url.hash.includes('refresh_token') || url.hash.includes('type=recovery');
+  const hasPkce = url.searchParams.get('code') && url.searchParams.get('state');
   if (hasHashToken || hasPkce) {
     const { error } = await supabase.auth.exchangeCodeForSession(url.href);
     if (error) console.error('Magic link exchange failed:', error.message);
-    // Clean URL after exchange
     history.replaceState({}, document.title, url.pathname);
   }
 }
+
+await refreshAuthUI();
+qs('#authDialog').close();
+
 
 // At any time:
 const { data: { session } } = await supabase.auth.getSession();
@@ -231,44 +244,62 @@ console.log('is_allowlisted?', allowed, allowErr);
 /* =========================
    Events / Bootstrap
    ========================= */
-function bindEvents(){
+function bindEvents() {
   const year = qs('#year');
   if (year) year.textContent = new Date().getFullYear();
 
-  // Auth button
-  qs('#loginBtn').addEventListener('click', async ()=>{
-    if(state.session){
+  // Admin button
+  on('#loginBtn', 'click', async () => {
+    console.debug('[admin] click');
+    const { data: { session } } = await supabase.auth.getSession();
+
+    // If logged in already → log out
+    if (session) {
+      console.debug('[admin] signing out', session.user?.email);
       await supabase.auth.signOut();
       state.session = null;
       toggleEditMode(false);
+      qs('#loginLabel').textContent = 'Admin';
       return;
     }
-    // reset dialog
+
+    // Show the OTP dialog
+    const dlg = qs('#authDialog');
+    if (!dlg) {
+      alert('Auth dialog not found in DOM');
+      return;
+    }
+
     setStatus('');
-    qs('#authHint').textContent = "Enter your email and click ‘Send code’. Only invited/allowlisted emails can sign in.";
+    const hint = qs('#authHint');
+    if (hint)
+      hint.textContent =
+        "Enter your email and click ‘Send code’. Only invited/allowlisted emails can sign in.";
+
+    // Reset fields & show the correct buttons
     qs('#otpRow')?.classList.add('hidden');
     qs('#verifyOtpBtn')?.classList.add('hidden');
     qs('#sendOtpBtn')?.classList.remove('hidden');
-    qs('#emailInput').value = '';
+    qs('#emailInput') && (qs('#emailInput').value = '');
     qs('#otpInput') && (qs('#otpInput').value = '');
-    qs('#authDialog').showModal();
+
+    dlg.showModal();
   });
 
   // OTP actions
-  qs('#sendOtpBtn').addEventListener('click', sendOtp);
-  // Form submit = verify code
-  qs('#authForm').addEventListener('submit', async (e)=>{
+  on('#sendOtpBtn', 'click', sendOtp);
+  on('#authForm', 'submit', async (e) => {
     e.preventDefault();
-    await verifyOtp();
+    await verifyOtp(); // after this verifyOtp will call refreshAuthUI()
   });
 
-  // Save buttons
-  qs('#saveHero').addEventListener('click', saveContent);
-  qs('#saveAbout').addEventListener('click', saveContent);
-  qs('#saveProjects').addEventListener('click', async ()=>{
-    alert('Project changes are saved automatically.');
-  });
-  qs('#addProject').addEventListener('click', addProjectFlow);
+  // Save / project handlers
+  on('#saveHero', 'click', saveContent);
+  on('#saveAbout', 'click', saveContent);
+  on('#saveProjects', 'click', () =>
+    alert('Project changes are saved automatically.')
+  );
+  on('#addProject', 'click', addProjectFlow);
 }
 
 async function bootstrap(){
