@@ -15,7 +15,9 @@
       <a href="#projects">Projects</a>
       <a href="#about">About</a>
       <a href="#contact">Contact</a>
-      <button id="loginBtn" class="login-link" aria-haspopup="dialog"><span id="loginLabel">Admin</span></button>
+      <button id="loginBtn" class="login-link" aria-haspopup="dialog">
+        <span id="loginLabel">Admin</span>
+      </button>
     </nav>
   </header>
 
@@ -74,23 +76,35 @@
     <p>© <span id="year"></span> Your Name</p>
   </footer>
 
-  <!-- Auth dialog -->
+  <!-- Auth dialog (OTP / Magic Link) -->
   <dialog id="authDialog" aria-labelledby="authTitle">
     <form id="authForm" method="dialog">
       <h3 id="authTitle">Admin</h3>
-      <p id="authHint" class="muted"></p>
+      <p id="authHint" class="muted">
+        Enter your email and click “Send code”. Only invited/allowlisted emails can sign in.
+      </p>
+
       <label>
         <span>Email</span>
-        <input type="email" id="emailInput" autocomplete="username" required>
+        <input type="email" id="emailInput" autocomplete="email" required>
       </label>
-      <label>
-        <span>Password</span>
-        <input type="password" id="passwordInput" autocomplete="current-password" required>
-      </label>
+
+      <!-- OTP code field (shown after Send) -->
+      <div id="otpRow" class="hidden">
+        <label>
+          <span>One-time code</span>
+          <input type="text" id="otpInput" inputmode="numeric" maxlength="6" placeholder="6-digit code">
+        </label>
+      </div>
+
       <menu class="dialog-actions">
         <button value="cancel" class="btn-outline" formnovalidate>Cancel</button>
-        <button id="authSubmit" value="default" class="btn">Continue</button>
+        <!-- Send OTP (handled in script.js) -->
+        <button id="sendOtpBtn" type="button" class="btn">Send code</button>
+        <!-- Verify OTP (submit form to trigger verify) -->
+        <button id="verifyOtpBtn" type="submit" class="btn hidden">Verify & Sign in</button>
       </menu>
+
       <p class="muted" id="authError" style="margin-top:8px;"></p>
     </form>
   </dialog>

@@ -1,14 +1,13 @@
 /**
  * Supabase-backed portfolio editor (client-only)
  * - Public can READ content/projects
- * - Authenticated users can EDIT (email + password via Supabase Auth)
+ * - Authenticated (allowlisted) users can EDIT via Email OTP / Magic Link
  *
  * 🔧 Fill in your Supabase URL and anon key below.
- * Create tables & policies with the provided SQL file in this zip.
  */
-const SUPABASE_URL = "https://yuhxhdjgosxzsbgkwjys.supabase.co";   // <- change me
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1aHhoZGpnb3N4enNiZ2t3anlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE4NjM1NDIsImV4cCI6MjA3NzQzOTU0Mn0.XRLqowylYEkSy1Z-7ZSVZv2Mq0n5AA2zSVPjAkcLMfo";                 // <- change me
-const STORAGE_BUCKET = "project-images";                   // <- create with public read
+const SUPABASE_URL = "https://yuhxhdjgosxzsbgkwjys.supabase.co";   // <- change me (project URL)
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1aHhoZGpnb3N4enNiZ2t3anlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE4NjM1NDIsImV4cCI6MjA3NzQzOTU0Mn0.XRLqowylYEkSy1Z-7ZSVZv2Mq0n5AA2zSVPjAkcLMfo"; // <- change me (public anon key)
+const STORAGE_BUCKET = "project-images"; // <- create with public read (or set storage policies)
 
 // Initialize client (using global from @supabase/supabase-js CDN)
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -23,11 +22,14 @@ const state = {
 
 function setStatus(text){ const e=qs('#authError'); if(e){ e.textContent = text || ''; } }
 function setLoginLabel(){
-  qs('#loginLabel').textContent = state.session ? 'Editing (Logout)' : 'Admin';
+  const lab = qs('#loginLabel');
+  if (lab) lab.textContent = state.session ? 'Editing (Logout)' : 'Admin';
 }
 
+/* =====================
+   Public content (READ)
+   ===================== */
 async function loadContent(){
-  // content table has rows { key, value }
   const { data, error } = await supabase.from('content').select('*');
   if(error){ console.error(error); return; }
   const map = Object.fromEntries((data || []).map(r => [r.key, r.value]));
@@ -47,7 +49,9 @@ async function saveContent(){
   alert('Saved content');
 }
 
-// Projects
+/* ================
+   Projects (CRUD)
+   ================ */
 async function loadProjects(){
   const { data, error } = await supabase
     .from('projects')
@@ -76,6 +80,7 @@ function renderProjects(){
     qs('.proj-desc', node).textContent = prj.description || '';
     const link = qs('.proj-link', node);
     if(prj.link){ link.href = prj.link; } else { link.classList.add('hidden'); }
+
     const delBtn = qs('.removeProject', node);
     if(state.session){ delBtn.classList.remove('hidden'); }
     delBtn.addEventListener('click', async ()=>{
@@ -84,6 +89,7 @@ function renderProjects(){
       if(error){ alert('Failed to delete: ' + error.message); return; }
       await loadProjects();
     });
+
     // inline edit
     if(state.session){
       qsa('[contenteditable]', node).forEach(el=>el.setAttribute('contenteditable','true'));
@@ -104,25 +110,23 @@ function debounce(fn, delay){
 
 function toggleEditMode(on){
   const show = !!on;
-  ['.edit-actions'].forEach(sel=>{
-    qsa(sel).forEach(e=>e.classList.toggle('hidden', !show));
-  });
+  qsa('.edit-actions').forEach(e=>e.classList.toggle('hidden', !show));
   ['#heroTitle','#heroSubtitle','#aboutText'].forEach(sel=>{
-    qs(sel).setAttribute('contenteditable', show ? 'true' : 'false');
+    const el = qs(sel);
+    if (el) el.setAttribute('contenteditable', show ? 'true' : 'false');
   });
   setLoginLabel();
   renderProjects();
 }
 
-// Add project flow incl upload
+/* =============================
+   Add project (includes upload)
+   ============================= */
 function addProjectFlow(){
   const dlg = qs('#projectDialog');
   const form = qs('#projectForm');
-  qs('#pTitle').value='';
-  qs('#pDesc').value='';
-  qs('#pLink').value='';
-  qs('#pImg').value='';
-  qs('#pImgFile').value='';
+  qs('#pTitle').value=''; qs('#pDesc').value=''; qs('#pLink').value='';
+  qs('#pImg').value=''; qs('#pImgFile').value='';
   dlg.showModal();
   form.onsubmit = async (e)=>{
     e.preventDefault();
@@ -149,53 +153,101 @@ function addProjectFlow(){
   };
 }
 
-// Auth
-async function signInFlow(){
+/* =========================
+   AUTH — OTP / Magic Link
+   ========================= */
+async function sendOtp(){
   const email = qs('#emailInput').value.trim();
-  const password = qs('#passwordInput').value;
-  setStatus('');
-  // try sign-in; if user not found, try sign-up
-  const { data: siData, error: siErr } = await supabase.auth.signInWithPassword({ email, password });
-  if(siErr){
-    // try sign-up
-    const { error: suErr } = await supabase.auth.signUp({ email, password });
-    if(suErr){ setStatus(suErr.message); return; }
-    setStatus('Account created. You are now signed in.');
-  }
+  if(!email) return setStatus('Enter your email');
+  setStatus('Sending code...');
+
+  // Invite-only: requires the user to exist already; set shouldCreateUser:false
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: false,
+      emailRedirectTo: window.location.origin + window.location.pathname // same page callback
+    }
+  });
+
+  if (error) return setStatus(error.message);
+
+  // Show OTP UI
+  setStatus('Check your email for a 6-digit code (or click the magic link).');
+  qs('#otpRow')?.classList.remove('hidden');
+  qs('#verifyOtpBtn')?.classList.remove('hidden');
+  qs('#sendOtpBtn')?.classList.add('hidden');
+}
+
+async function verifyOtp(){
+  const email = qs('#emailInput').value.trim();
+  const token = qs('#otpInput').value.trim();
+  if(!token) return setStatus('Enter the 6-digit code');
+
+  setStatus('Verifying...');
+  const { error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'email' // 6-digit email code
+  });
+
+  if (error) return setStatus(error.message);
+
   const { data: sess } = await supabase.auth.getSession();
   state.session = sess.session;
+  setStatus('');
   qs('#authDialog').close();
   toggleEditMode(true);
 }
 
+// Handle magic-link redirect (hash or code)
+async function handleMagicLink(){
+  const hash = window.location.hash || '';
+  if(hash && (hash.includes('access_token') || hash.includes('code='))){
+    const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+    if(error) console.error('Magic link exchange failed:', error.message);
+    history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+/* =========================
+   Events / Bootstrap
+   ========================= */
 function bindEvents(){
-  qs('#year').textContent = new Date().getFullYear();
+  const year = qs('#year');
+  if (year) year.textContent = new Date().getFullYear();
 
   // Auth button
   qs('#loginBtn').addEventListener('click', async ()=>{
     if(state.session){
-      // logout
       await supabase.auth.signOut();
       state.session = null;
       toggleEditMode(false);
       return;
     }
+    // reset dialog
     setStatus('');
-    qs('#authHint').textContent = "Sign in with your Supabase email & password. New? We'll create an account.";
+    qs('#authHint').textContent = "Enter your email and click ‘Send code’. Only invited/allowlisted emails can sign in.";
+    qs('#otpRow')?.classList.add('hidden');
+    qs('#verifyOtpBtn')?.classList.add('hidden');
+    qs('#sendOtpBtn')?.classList.remove('hidden');
+    qs('#emailInput').value = '';
+    qs('#otpInput') && (qs('#otpInput').value = '');
     qs('#authDialog').showModal();
   });
 
-  // Auth submit
+  // OTP actions
+  qs('#sendOtpBtn').addEventListener('click', sendOtp);
+  // Form submit = verify code
   qs('#authForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    await signInFlow();
+    await verifyOtp();
   });
 
   // Save buttons
   qs('#saveHero').addEventListener('click', saveContent);
   qs('#saveAbout').addEventListener('click', saveContent);
   qs('#saveProjects').addEventListener('click', async ()=>{
-    // no-op: inline edits already auto-saved
     alert('Project changes are saved automatically.');
   });
   qs('#addProject').addEventListener('click', addProjectFlow);
@@ -203,9 +255,16 @@ function bindEvents(){
 
 async function bootstrap(){
   bindEvents();
+
+  // Exchange magic link (if coming from email)
+  await handleMagicLink();
+
+  // Get current session and set edit mode
   const { data: sess } = await supabase.auth.getSession();
   state.session = sess.session;
   toggleEditMode(!!state.session);
+
+  // Load public data
   await loadContent();
   await loadProjects();
 }
