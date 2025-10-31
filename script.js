@@ -1,3 +1,38 @@
+// --- ADMIN HOTFIX: prove the click and open the dialog ---
+console.log('[hotfix] script loaded');
+
+(function () {
+  function openAuthDialog() {
+    const dlg = document.getElementById('authDialog');
+    if (!dlg) { alert('[hotfix] #authDialog not in DOM'); return; }
+    console.log('[hotfix] opening dialog');
+    dlg.showModal();
+  }
+
+  // Global capture: fires even if other handlers stopPropagation
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest && e.target.closest('#loginBtn');
+    if (btn) {
+      console.log('[hotfix] CAPTURE click on #loginBtn via', e.target);
+      e.preventDefault();
+      openAuthDialog();
+    }
+  }, true);
+
+  // After everything is loaded, also attach a direct listener
+  window.addEventListener('load', () => {
+    const btn = document.getElementById('loginBtn');
+    console.log('[hotfix] window.load; loginBtn =', !!btn);
+    if (btn) {
+      btn.addEventListener('click', (e) => {
+        console.log('[hotfix] DIRECT listener fired');
+        e.preventDefault();
+        openAuthDialog();
+      });
+    }
+  });
+})();
+
 /**
  * Supabase-backed portfolio editor (client-only)
  * - Public can READ content/projects
@@ -332,3 +367,21 @@ console.log(SUPABASE_URL);
 // See what loadContent() gets
 const { data, error } = await supabase.from('content').select('*');
 console.log('content rows:', data, 'error:', error);
+
+console.log('[boot] script.js loaded');
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('loginBtn');
+  const dlg = document.getElementById('authDialog');
+  console.log('[boot] DOM ready; loginBtn=', !!btn, 'authDialog=', !!dlg);
+
+  if (!btn) { console.warn('No #loginBtn in DOM'); return; }
+
+  // TEMP: minimal test handler
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    console.log('[admin] clicked');
+    if (!dlg) { alert('Auth dialog not found'); return; }
+    dlg.showModal(); // should open every time for this test
+  });
+});

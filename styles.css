@@ -180,3 +180,7 @@ dialog form{
   .hero{padding:44px 0}
   .card img.thumb{height:140px}
 }
+
+#loginBtn { position: relative; z-index: 11; pointer-events: auto; }
+.site-header { position: sticky; z-index: 10; }
+nav { display:flex; align-items:center; gap:16px; } /* make sure items don't overlap */
