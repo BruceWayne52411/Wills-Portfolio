@@ -17,8 +17,11 @@ const qsa = (s, o=document)=>Array.from(o.querySelectorAll(s));
 
 const state = {
   session: null,
-  projects: []
+  projects: [],
+  isAdmin: false,  // email is on allowlist
+  editing: false   // UI edit mode on/off
 };
+
 
 function setStatus(text){ const e=qs('#authError'); if(e){ e.textContent = text || ''; } }
 function setLoginLabel(){
@@ -32,17 +35,17 @@ async function refreshAuthUI() {
 
   let allowed = false;
   if (session) {
-    const { data, error } = await supabase.rpc('is_allowlisted');
-    if (error) console.warn('is_allowlisted RPC error:', error);
+    const { data } = await supabase.rpc('is_allowlisted');
     allowed = !!data;
   }
-
   state.isAdmin = allowed;
-  toggleEditMode(state.isAdmin);           // only show edit tools if allowlisted
-  qs('#loginLabel').textContent =
-    state.isAdmin ? 'Editing (Logout)' :
-    (state.session ? 'Logout' : 'Admin');  // clearer button label
+
+  // If you’re no longer allowed, exit edit mode
+  if (!state.isAdmin && state.editing) toggleEditMode(false);
+
+  updateLoginButton();
 }
+
 
 
 /* =====================
@@ -123,20 +126,30 @@ function renderProjects(){
   });
 }
 
+function updateLoginButton() {
+  const el = qs('#loginLabel');
+  if (!el) return;
+  if (state.editing)        { el.textContent = 'Finish editing'; return; }
+  if (state.isAdmin)        { el.textContent = 'Edit';           return; }
+  if (state.session)        { el.textContent = 'Logout';         return; }
+  el.textContent = 'Admin';
+}
+
+
 function debounce(fn, delay){
   let t; return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), delay); };
 }
 
 function toggleEditMode(on){
-  const show = !!on;
-  qsa('.edit-actions').forEach(e=>e.classList.toggle('hidden', !show));
+  state.editing = !!on;
+  qsa('.edit-actions').forEach(e=>e.classList.toggle('hidden', !state.editing));
   ['#heroTitle','#heroSubtitle','#aboutText'].forEach(sel=>{
-    const el = qs(sel);
-    if (el) el.setAttribute('contenteditable', show ? 'true' : 'false');
+    const el = qs(sel); if (el) el.setAttribute('contenteditable', state.editing ? 'true' : 'false');
   });
-  setLoginLabel();
+  updateLoginButton();
   renderProjects();
 }
+
 
 /* =============================
    Add project (includes upload)
@@ -250,41 +263,34 @@ function bindEvents() {
 
   // Admin button
   on('#loginBtn', 'click', async () => {
-    console.debug('[admin] click');
-    const { data: { session } } = await supabase.auth.getSession();
+  // If currently editing → finish (don’t log out)
+  if (state.editing) { toggleEditMode(false); return; }
 
-    // If logged in already → log out
-    if (session) {
-      console.debug('[admin] signing out', session.user?.email);
-      await supabase.auth.signOut();
-      state.session = null;
-      toggleEditMode(false);
-      qs('#loginLabel').textContent = 'Admin';
-      return;
-    }
+  // If signed in
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    // If allow-listed → start editing
+    if (state.isAdmin) { toggleEditMode(true); return; }
+    // Not allow-listed → log out
+    await supabase.auth.signOut();
+    state.session = null;
+    updateLoginButton();
+    return;
+  }
 
-    // Show the OTP dialog
-    const dlg = qs('#authDialog');
-    if (!dlg) {
-      alert('Auth dialog not found in DOM');
-      return;
-    }
+  // Not signed in → open OTP dialog
+  const dlg = qs('#authDialog');
+  if (!dlg) { alert('Auth dialog not found'); return; }
+  setStatus('');
+  qs('#authHint').textContent = "Enter your email and click ‘Send code’. Only invited/allowlisted emails can sign in.";
+  qs('#otpRow')?.classList.add('hidden');
+  qs('#verifyOtpBtn')?.classList.add('hidden');
+  qs('#sendOtpBtn')?.classList.remove('hidden');
+  qs('#emailInput') && (qs('#emailInput').value = '');
+  qs('#otpInput')   && (qs('#otpInput').value   = '');
+  dlg.showModal();
+});
 
-    setStatus('');
-    const hint = qs('#authHint');
-    if (hint)
-      hint.textContent =
-        "Enter your email and click ‘Send code’. Only invited/allowlisted emails can sign in.";
-
-    // Reset fields & show the correct buttons
-    qs('#otpRow')?.classList.add('hidden');
-    qs('#verifyOtpBtn')?.classList.add('hidden');
-    qs('#sendOtpBtn')?.classList.remove('hidden');
-    qs('#emailInput') && (qs('#emailInput').value = '');
-    qs('#otpInput') && (qs('#otpInput').value = '');
-
-    dlg.showModal();
-  });
 
   // OTP actions
   on('#sendOtpBtn', 'click', sendOtp);
