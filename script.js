@@ -270,3 +270,10 @@ async function bootstrap(){
 }
 
 document.addEventListener('DOMContentLoaded', bootstrap);
+
+// Show which project your JS is hitting
+console.log(SUPABASE_URL);
+
+// See what loadContent() gets
+const { data, error } = await supabase.from('content').select('*');
+console.log('content rows:', data, 'error:', error);
