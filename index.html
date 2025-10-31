@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Portfolio</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="#">Portfolio</a>
+    <nav>
+      <a href="#projects">Projects</a>
+      <a href="#about">About</a>
+      <a href="#contact">Contact</a>
+      <button id="loginBtn" class="login-link" aria-haspopup="dialog"><span id="loginLabel">Admin</span></button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h1 id="heroTitle" data-key="heroTitle" contenteditable="false">Hi, I'm Your Name</h1>
+      <p id="heroSubtitle" data-key="heroSubtitle" class="subtitle" contenteditable="false">
+        Security Officer • Web Dev Student • PC Builder
+      </p>
+      <div class="edit-actions hidden">
+        <button class="btn" id="saveHero">Save hero</button>
+      </div>
+    </section>
+
+    <section id="projects" aria-labelledby="projects-title">
+      <div class="flex-row">
+        <h2 id="projects-title">Projects</h2>
+        <div class="edit-actions hidden">
+          <button class="btn-outline" id="addProject">Add Project</button>
+          <button class="btn" id="saveProjects">Save Projects</button>
+        </div>
+      </div>
+      <div id="projectsGrid" class="grid" role="list"></div>
+      <template id="projectCardTpl">
+        <article class="card" role="listitem">
+          <div class="thumb-wrap">
+            <img class="thumb" alt="Project image">
+          </div>
+          <h3 class="proj-title" contenteditable="false"></h3>
+          <p class="proj-desc" contenteditable="false"></p>
+          <div class="row">
+            <a class="btn-outline proj-link" href="#" target="_blank" rel="noopener">Open</a>
+            <button class="danger small removeProject hidden">Delete</button>
+          </div>
+        </article>
+      </template>
+    </section>
+
+    <section id="about" aria-labelledby="about-title">
+      <h2 id="about-title">About</h2>
+      <p id="aboutText" data-key="aboutText" contenteditable="false">
+        Write a short bio about yourself here. You can toggle Admin and edit this text.
+      </p>
+      <div class="edit-actions hidden">
+        <button class="btn" id="saveAbout">Save about</button>
+      </div>
+    </section>
+
+    <section id="contact" aria-labelledby="contact-title">
+      <h2 id="contact-title">Contact</h2>
+      <p>Email me at <a href="mailto:your@email.com">your@email.com</a></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>© <span id="year"></span> Your Name</p>
+  </footer>
+
+  <!-- Auth dialog -->
+  <dialog id="authDialog" aria-labelledby="authTitle">
+    <form id="authForm" method="dialog">
+      <h3 id="authTitle">Admin</h3>
+      <p id="authHint" class="muted"></p>
+      <label>
+        <span>Email</span>
+        <input type="email" id="emailInput" autocomplete="username" required>
+      </label>
+      <label>
+        <span>Password</span>
+        <input type="password" id="passwordInput" autocomplete="current-password" required>
+      </label>
+      <menu class="dialog-actions">
+        <button value="cancel" class="btn-outline">Cancel</button>
+        <button id="authSubmit" value="default" class="btn">Continue</button>
+      </menu>
+      <p class="muted" id="authError" style="margin-top:8px;"></p>
+    </form>
+  </dialog>
+
+  <!-- Add project modal -->
+  <dialog id="projectDialog" aria-labelledby="projTitle">
+    <form id="projectForm" method="dialog" enctype="multipart/form-data">
+      <h3 id="projTitle">Add Project</h3>
+      <label>
+        <span>Title</span>
+        <input type="text" id="pTitle" required>
+      </label>
+      <label>
+        <span>Description</span>
+        <textarea id="pDesc" rows="3"></textarea>
+      </label>
+      <label>
+        <span>Link</span>
+        <input type="url" id="pLink" placeholder="https://...">
+      </label>
+      <details>
+        <summary>Image</summary>
+        <label>
+          <span>Upload File (uploads to Supabase Storage)</span>
+          <input type="file" id="pImgFile" accept="image/*">
+        </label>
+        <p class="muted">— or —</p>
+        <label>
+          <span>Image URL</span>
+          <input type="url" id="pImg" placeholder="https://...">
+        </label>
+      </details>
+      <menu class="dialog-actions">
+        <button value="cancel" class="btn-outline">Cancel</button>
+        <button id="projectSubmit" value="default" class="btn">Add</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Supabase JS CDN -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
